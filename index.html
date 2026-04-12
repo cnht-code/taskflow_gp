@@ -276,7 +276,7 @@ input[type=date].input::-webkit-calendar-picker-indicator{background-image:url("
 // ═══════════════════════════════════════════════════════════════
 const ADMIN_USER = 'haipn';
 // ← Admin: cập nhật URL mới tại đây khi redeploy GAS, user không cần làm gì
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaQfpSpRDa3500DF0kxbHtBGn-_VrQ-gX5yW82br4OX7_ZH38E6HIFLDqOnaiDIPYr/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtm6uTBahWDQkIs29_1u0jG--Kjc9_ETjXOBqfuh8hs9dEvAGLYfiAeZd_-Y_YQp0p/exec';
 
 // Luôn dùng DEFAULT_SCRIPT_URL từ file HTML — ghi đè localStorage cũ nếu khác
 // Đảm bảo khi admin cập nhật file mới, tất cả user tự động dùng URL mới
@@ -656,16 +656,14 @@ function sendTelegramNotif(to, type, taskId) {
     const lines    = ['⚡ <b>TaskFlow</b>', header];
     if (task?.title) lines.push(`📋 ${esc(task.title)}`);
     if (meta) lines.push(meta);
-    text = lines.join('
-');
+    text = lines.join('\n');
   } else {
     const msgLine = TG_USER_MSG[type];
     if (!msgLine) return;
     const lines = ['⚡ <b>TaskFlow</b>', msgLine];
     if (task?.title) lines.push(`📋 ${esc(task.title)}`);
     if (meta) lines.push(meta);
-    text = lines.join('
-');
+    text = lines.join('\n');
   }
 
   apiPost({ action:'sendTelegram', to, chatId: to===CONFIG.USERNAME ? CONFIG.TELEGRAM_CHAT_ID : '', text, user: CONFIG.USERNAME }).catch(() => {});
@@ -3639,8 +3637,7 @@ async function testTelegram() {
     const res = await apiPost({
       action:'sendTelegram',
       chatId: String(chatId),
-      text:'⚡ <b>TaskFlow</b>
-✅ Kết nối thành công! Bạn sẽ nhận thông báo tại đây.',
+      text:'⚡ <b>TaskFlow</b>\n✅ Kết nối thành công! Bạn sẽ nhận thông báo tại đây.',
       user: CONFIG.USERNAME
     });
     if (resultEl) {
