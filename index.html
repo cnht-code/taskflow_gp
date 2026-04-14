@@ -4,10 +4,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- APP_VERSION: 113 -->
+  <!-- APP_VERSION: 114 -->
   <script>
     // Tự động reload khi phát hiện version mới
-    const APP_VERSION = '113';
+    const APP_VERSION = '114';
     const storedVersion = localStorage.getItem('tf_app_version');
     if (storedVersion && storedVersion !== APP_VERSION) {
       // Version mới → xóa cache trình duyệt và reload
@@ -275,15 +275,32 @@ input[type=date].input::-webkit-calendar-picker-indicator{background-image:url("
 // CONFIG
 // ═══════════════════════════════════════════════════════════════
 const ADMIN_USER = 'haipn';
-// ← Admin: cập nhật URL mới tại đây khi redeploy GAS, user không cần làm gì
+// URL backend hiện tại của hệ thống mới
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaQfpSpRDa3500DF0kxbHtBGn-_VrQ-gX5yW82br4OX7_ZH38E6HIFLDqOnaiDIPYr/exec';
+// Nguồn dữ liệu hệ thống cũ để import một lần sang file mới
+const LEGACY_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtm6uTBahWDQkIs29_1u0jG--Kjc9_ETjXOBqfuh8hs9dEvAGLYfiAeZd_-Y_YQp0p/exec';
+const LEGACY_SHEET_URL  = 'https://docs.google.com/spreadsheets/d/1NVhHNPPICa7pANhA8lraW6VukXgfBQUiB-6QRaDOEss/edit?gid=273187798#gid=273187798';
+const LEGACY_SPREADSHEET_ID = '1NVhHNPPICa7pANhA8lraW6VukXgfBQUiB-6QRaDOEss';
 
-// Luôn dùng DEFAULT_SCRIPT_URL từ file HTML — ghi đè localStorage cũ nếu khác
-// Đảm bảo khi admin cập nhật file mới, tất cả user tự động dùng URL mới
-if (localStorage.getItem('tf_script_url') !== DEFAULT_SCRIPT_URL) {
-  localStorage.setItem('tf_script_url', DEFAULT_SCRIPT_URL);
-  localStorage.setItem('tf_shared_url', DEFAULT_SCRIPT_URL);
-}
+// Ưu tiên URL đã lưu ở localStorage để lần sau không phải sửa lại file HTML.
+// Có thể ép dùng URL khác bằng query param ?gas=<script_url>
+const BOOTSTRAP_SCRIPT_URL = (function(){
+  try {
+    const qpUrl = new URLSearchParams(window.location.search).get('gas');
+    const saved = localStorage.getItem('tf_script_url') || localStorage.getItem('tf_shared_url') || '';
+    const chosen = (qpUrl || saved || DEFAULT_SCRIPT_URL || '').trim();
+    if (qpUrl) {
+      localStorage.setItem('tf_script_url', qpUrl);
+      localStorage.setItem('tf_shared_url', qpUrl);
+    } else {
+      if (!localStorage.getItem('tf_script_url') && DEFAULT_SCRIPT_URL) localStorage.setItem('tf_script_url', DEFAULT_SCRIPT_URL);
+      if (!localStorage.getItem('tf_shared_url') && DEFAULT_SCRIPT_URL) localStorage.setItem('tf_shared_url', DEFAULT_SCRIPT_URL);
+    }
+    return chosen;
+  } catch(e) {
+    return DEFAULT_SCRIPT_URL;
+  }
+})();
 
 // Tên bot Telegram — admin đặt khi tạo bot qua @BotFather
 const TG_BOT_NAME  = 'Taskflow_cnht_bot';
@@ -312,7 +329,7 @@ let _digestSentAm = localStorage.getItem('tf_digest_sent_am')||'';
 let _digestSentPm = localStorage.getItem('tf_digest_sent_pm')||'';
 
 let CONFIG = {
-  SCRIPT_URL:        DEFAULT_SCRIPT_URL,
+  SCRIPT_URL:        BOOTSTRAP_SCRIPT_URL,
   USERNAME:          localStorage.getItem('tf_username') || '',
   EMAIL_DOMAIN:      localStorage.getItem('tf_email_domain') || '',
   TELEGRAM_CHAT_ID:  localStorage.getItem('tf_telegram_chat_id') || '',
@@ -4193,7 +4210,7 @@ async function saveConfig() {
   const user=(document.getElementById('cfg-user')?.value||'').trim();
   if(!user){toast('Vui lòng nhập tên người dùng!','error');return;}
   CONFIG.SCRIPT_URL=url;CONFIG.USERNAME=user;
-  localStorage.setItem('tf_script_url',url);localStorage.setItem('tf_username',user);
+  localStorage.setItem('tf_script_url',url);localStorage.setItem('tf_shared_url',url);localStorage.setItem('tf_username',user);
   // TELEGRAM_CHAT_ID được quản lý riêng qua connectTelegram/disconnectTelegram
   if(!url){
     stopAutoSync();updateSyncBar('local');
@@ -4267,7 +4284,7 @@ function debugReviewTasks() {
   const bannerCount = tasks.filter(t=>t.status==='pending_review'&&t.reviewer===CONFIG.USERNAME&&!t.reviewerOpinion).length;
   alert('Tasks liên quan ('+allRV.length+') | Banner count:'+bannerCount+'\n\n'+(info||'Không có')+'\n\nUSER: '+CONFIG.USERNAME);
 }
-function clearConfig(){if(!confirm('Xóa cấu hình?'))return;CONFIG.SCRIPT_URL='';CONFIG.USERNAME='';localStorage.removeItem('tf_script_url');localStorage.removeItem('tf_username');stopAutoSync();updateSyncBar('local');render();toast('🗑️ Đã xóa cấu hình');}
+function clearConfig(){if(!confirm('Xóa cấu hình?'))return;CONFIG.SCRIPT_URL='';CONFIG.USERNAME='';localStorage.removeItem('tf_script_url');localStorage.removeItem('tf_shared_url');localStorage.removeItem('tf_username');stopAutoSync();updateSyncBar('local');render();toast('🗑️ Đã xóa cấu hình');}
 
 // ═══════════════════════════════════════════════════════════════
 // EXPORT EXCEL
@@ -4385,6 +4402,23 @@ function renderImport() {
       <strong>Chỉ thêm mới:</strong> Giữ nguyên dữ liệu hiện tại, chỉ thêm công việc chưa có &nbsp;·&nbsp; <strong>Ghi đè:</strong> Thay thế toàn bộ công việc trong phạm vi đã chọn
     </div>
   </div>` : '';
+  const legacyImportCard = isAdmin() ? `
+  <div class="card" style="margin-bottom:16px;border-color:rgba(79,110,255,.32)">
+    <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:var(--accent)">🗂️ Import CSDL cũ</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:10px">
+      Tự động lấy dữ liệu từ hệ thống cũ và nhập sang file Google Sheet mới.<br>
+      Sẽ đồng bộ các sheet: <strong style="color:var(--text)">Tasks, UpdateLog, Notifications, Users</strong>.
+    </div>
+    <div style="background:#0A0F1E;border-radius:8px;padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:10px">
+      <div><strong>Nguồn GAS cũ:</strong> <span style="word-break:break-all">${esc(LEGACY_SCRIPT_URL)}</span></div>
+      <div style="margin-top:4px"><strong>Nguồn Sheet cũ:</strong> <span style="word-break:break-all">${esc(LEGACY_SPREADSHEET_ID)}</span></div>
+    </div>
+    <div class="flex" style="gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="importLegacyDatabase()">🗂️ Import CSDL cũ</button>
+      <button class="btn btn-ghost btn-sm" onclick="window.open(LEGACY_SHEET_URL,'_blank')">🔗 Mở Sheet cũ</button>
+    </div>
+    <div id="legacy-import-result" style="margin-top:10px;font-size:12px;min-height:18px"></div>
+  </div>` : '';
   return `<div style="animation:slideUp .3s">
   <div class="section-header" style="margin-bottom:18px">
     <div><div class="section-title" style="font-size:18px">📥 Import từ Excel</div>
@@ -4393,7 +4427,7 @@ function renderImport() {
   <div class="stat-grid" style="margin-bottom:18px">
     ${sc('📋','Hiện có',tasks.length,'var(--accent)')}${sc('✅','Hoàn thành',done,'var(--green)')}${sc('⚡','Đang làm',ip,'#4F6EFF')}${sc('🚨','Quá hạn',od,'var(--red)')}
   </div>
-  ${adminOpts}
+  ${adminOpts}${legacyImportCard}
   <div class="card" style="margin-bottom:16px">
     <div style="font-weight:700;font-size:14px;margin-bottom:12px">📂 Chọn file Excel</div>
     <div class="upload-zone" id="drop-zone" onclick="document.getElementById('xl-file').click()"
@@ -4497,6 +4531,44 @@ function showImportPreview(filename,parsed){
   </div>`;
 }
 function cancelImport(){importPreview=[];const el=document.getElementById('xl-file');if(el)el.value='';const a=document.getElementById('import-preview-area');if(a)a.innerHTML='';}
+
+async function importLegacyDatabase() {
+  if (!isAdmin()) { toast('Chỉ admin mới được import CSDL cũ!', 'error'); return; }
+  if (!CONFIG.SCRIPT_URL) { toast('Cần cấu hình Script URL của hệ thống mới trước!', 'error'); return; }
+  const resultEl = document.getElementById('legacy-import-result');
+  const setMsg = (html) => { if (resultEl) resultEl.innerHTML = html; };
+  if (!confirm('Import CSDL cũ sang file mới?\n\nSẽ tự động lấy dữ liệu từ file cũ và merge vào file hiện tại.')) return;
+  setMsg('<span style="color:var(--accent)"><span class="spin">↻</span> Đang import dữ liệu cũ...</span>');
+  try {
+    const res = await apiPost({
+      action:'importLegacyDb',
+      legacySpreadsheetId: LEGACY_SPREADSHEET_ID,
+      legacySheetUrl: LEGACY_SHEET_URL,
+      legacyScriptUrl: LEGACY_SCRIPT_URL,
+      user: CONFIG.USERNAME
+    });
+    if (!res || res.ok === false) throw new Error((res && res.error) || 'Import thất bại');
+    await syncFromSheets(true);
+    const sum = res.summary || {};
+    const line = (name, label) => {
+      const x = sum[name] || {added:0,updated:0,skipped:0};
+      return `${label}: +${x.added||0} mới, ~${x.updated||0} cập nhật`;
+    };
+    const lines = [
+      line('Tasks','Tasks'),
+      line('UpdateLog','UpdateLog'),
+      line('Notifications','Notifications'),
+      line('Users','Users')
+    ];
+    setMsg(`<div style="color:var(--green);line-height:1.7">✅ Import xong từ CSDL cũ.<br>${lines.map(esc).join('<br>')}</div>`);
+    toast(`✅ Đã import CSDL cũ${res.totalImported?` · ${res.totalImported} bản ghi mới/cập nhật`:''}`,'success');
+    render();
+  } catch(e) {
+    const msg = e.message || String(e);
+    setMsg(`<span style="color:var(--red)">❌ ${esc(msg)}</span>`);
+    toast('❌ Import CSDL cũ thất bại: ' + msg, 'error');
+  }
+}
 
 async function doImportSmart(){
   if(!importPreview.length)return;
